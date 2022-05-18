@@ -201,6 +201,16 @@ def main(program):
 	def_parser.add_argument('--start', default=None, help='First index in range', type=int, required=True)
 	def_parser.add_argument('--stop', default=None, help='Last index in range. Must be larger than start', type=int, required=True)
 
+	# PARSER : ADD
+	a_parser = subparsers.add_parser('add', help='Define the range by first index', parents=[parent_parser])
+	a_parser.add_argument('--add', default=None, help='Length of extract', type=int, required=True)
+	a_parser.add_argument('--start', default=None, help='First index in range', type=int, required=True)
+
+	# PARSER : SUBTRACT
+	s_parser = subparsers.add_parser('subtract', help='Define the range by last index', parents=[parent_parser])
+	s_parser.add_argument('--stop', default=None, help='Last index in range', type=int, required=True)
+	s_parser.add_argument('--sub', default=None, help='Length of extract', type=int, required=True)
+
 	args = parent_parser.parse_args()
 
 	# CHECK FOR VALID INPUT
@@ -214,6 +224,14 @@ def main(program):
 	if program == 'define':
 		start = args.start
 		stop = args.stop
+
+	if program == 'add':
+		start = args.start
+		stop = start + args.add
+
+	if program == 'subtract':
+		stop = args.stop
+		start = stop - args.sub
 
 	extract_range(args, start, stop, outdir)
 
