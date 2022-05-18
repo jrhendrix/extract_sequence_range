@@ -1,5 +1,6 @@
 # xRange
-A script that provides several options for extracting a range of characters from a FASTA file
+Extract a segment of characters from a DNA sequence file
+A script that provides several options for extracting a sequence from a FASTA file
 
 
 ## Usage
