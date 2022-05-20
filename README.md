@@ -1,7 +1,6 @@
 # xRange
-Extract a segment of characters from a DNA sequence file
-A script that provides several options for extracting a sequence from a FASTA file
-
+Extract a segment of characters from a DNA sequence file. The user can define the exact positions of the range or provide a single position and specify the number of bases upstream or downstream.
+Eventually there will be functionality to extract the first or last bases from a contig.
 
 ## Usage
 There are three ways to specify the range of sequence to extract: defined coordinates, add from position, and subtract from position
