@@ -71,16 +71,19 @@ class Dir:
 
 def modify_index(start, stop):
 
-	# INDEX MODIFIER
+	# INDEX MODIFIER and FIX OUT OF BOUNDS CASES
 	## Note: Input will be position. Translate to index
-	start = start - 1
-	stop = stop - 1
+	if start != None:
+		start = start - 1
+		if start < 0:
+			start = 0
+	if stop != None:
+		stop = stop - 1
+		if stop < 0:
+			stop = 0
 
-	# FIX OUT OF BOUNDS CASES
-	if start < 0:
-		start = 0
-	if stop < 0:
-		stop = 0
+	if stop is None or start is None:
+		return start, stop
 
 	# CHECK THAT 'STOP' COMES AFTER 'START'
 	if stop < start: # flip indecies
@@ -89,12 +92,12 @@ def modify_index(start, stop):
 		start = stop
 		stop = iStart
 
-	return(start, stop)
+	return start, stop
 
 
 
 
-def extract_range(args, start, stop, outdir):
+def extract_range(args, start, stop, flag, outdir):
 	'''Find a range of indexes and write bases to file'''
 
 	start, stop = modify_index(start, stop)
@@ -105,7 +108,7 @@ def extract_range(args, start, stop, outdir):
 
 	# LOOP THROUGH SEQUENCE FILE
 	records = []
-	f1 = open(args.fasta, 'r')
+	f1 = open(args.input_fasta, 'r')
 	for record in SeqIO.parse(f1, 'fasta'):
 		# Restrict extraction to a specific node
 		if args.id != None and args.id != record.id:
@@ -114,8 +117,17 @@ def extract_range(args, start, stop, outdir):
 		max_index = len(record.seq)
 
 		# INDEX MODIFIER
-		if stop > max_index:
+		if stop is None:
 			stop = max_index
+		elif stop > max_index:
+			stop = max_index
+
+		# ADJUST START FOR LAST X METHOD
+		if flag == 'last':
+			start = stop - args.num
+			if start < 0:
+				start = 0
+
 
 		print('xRange uses an inclusive range')
 		print(f'Exporting sequence at positions: {start+1} - {stop+1}')
@@ -153,8 +165,11 @@ def extract_range(args, start, stop, outdir):
 def check_input(args):
 
 	# CHECK IF FILE EXISTS
+	if not args.input_fasta:
+		print("ERROR: Could not find file")
+		return 1
 	try:
-		f = File(args.fasta)
+		f = File(args.input_fasta)
 	except IOError:
 		print("ERROR: Could not find file")
 		return 1
@@ -170,8 +185,8 @@ def check_input(args):
 def make_output(args):
 
 	# CHECK THAT OUTPUT DIRECTORY EXISTS
-	d = Dir(args.p)
-	outpath = '/'.join((args.p, args.output_directory))
+	d = Dir(args.output_path)
+	outpath = '/'.join((args.output_path, args.output_directory))
 	if os.path.isdir(outpath):
 		outdir = Dir(outpath)
 	else:
@@ -180,38 +195,35 @@ def make_output(args):
 
 	return outdir
 
+def define(args):
+	start = args.start
+	stop  = args.stop
+	return start, stop, 'define'
 
+def add(args):
+	start = args.start
+	stop = start + args.add
+	return start, stop, 'add'
 
-def main(program):
-	cwd = os.getcwd()
+def sub(args):
+	stop = args.stop
+	start = stop - args.sub
+	return start, stop, 'sub'
 
-	# PARSER : ROOT
-	parent_parser = argparse.ArgumentParser(prog='xRange', add_help=False)
-	parent_parser.add_argument('-f', '--fasta', help="FASTA file containing sequences")
-	parent_parser.add_argument('--id', default=None, help='Match sequence ID')
-	parent_parser.add_argument('-o', '--output_directory', default='xSequences', help='Prefix of output directory', type=str)
-	parent_parser.add_argument('--outID', default=None, help='ID for output sequence', type=str)
-	parent_parser.add_argument('-p', default=cwd, help='Path to output', type=str)
-	parent_parser.add_argument('-r', '--reverse_complement', default=False, action='store_true', help='Gets the reverse compliment')
-	parent_parser.add_argument('-s', '--savename', default='xSeq', help='Prefix for output file')
-	subparsers = parent_parser.add_subparsers(help='sub-command help')
+def first(args):
+	start = 1
+	stop = args.num
+	return start, stop, 'first'
 
-	# PARSER : DEFINED
-	def_parser = subparsers.add_parser('define', help='Define the range by index', parents=[parent_parser])
-	def_parser.add_argument('--start', default=None, help='First index in range', type=int, required=True)
-	def_parser.add_argument('--stop', default=None, help='Last index in range. Must be larger than start', type=int, required=True)
+def last(args):
+	start = None
+	stop = None
+	return start, stop, 'last'
 
-	# PARSER : ADD
-	a_parser = subparsers.add_parser('add', help='Define the range by first index', parents=[parent_parser])
-	a_parser.add_argument('--add', default=None, help='Length of extract', type=int, required=True)
-	a_parser.add_argument('--start', default=None, help='First index in range', type=int, required=True)
+def main(args):
 
-	# PARSER : SUBTRACT
-	s_parser = subparsers.add_parser('subtract', help='Define the range by last index', parents=[parent_parser])
-	s_parser.add_argument('--stop', default=None, help='Last index in range', type=int, required=True)
-	s_parser.add_argument('--sub', default=None, help='Length of extract', type=int, required=True)
-
-	args = parent_parser.parse_args()
+	command = 'Command: %s' % ' '.join(sys.argv)
+	print(f'Running: ', command)
 
 	# CHECK FOR VALID INPUT
 	check = check_input(args)
@@ -219,27 +231,101 @@ def main(program):
 		print('Check input returned non-zero result. Abort.')
 		exit()
 
+	# SET UP OUTPUT
 	outdir = make_output(args)
 
-	if program == 'define':
-		start = args.start
-		stop = args.stop
+	# GET START AND STOP
+	start, stop, flag = args.func(args)
 
-	if program == 'add':
-		start = args.start
-		stop = start + args.add
-
-	if program == 'subtract':
-		stop = args.stop
-		start = stop - args.sub
-
-	extract_range(args, start, stop, outdir)
-
+	# EXTRACT SEQUENCE
+	extract_range(args, start, stop, flag, outdir)
 
 
 
 if __name__ == "__main__":
-	main(sys.argv[1])
+	cwd = os.getcwd()
+
+	# PARSER : ROOT
+	parent_parser = argparse.ArgumentParser(prog='xRange')
+	subparsers = parent_parser.add_subparsers(help='available actions')
+	subparsers.required = True
+
+	# DEFINE SUBPARSERS
+	parser_def = subparsers.add_parser('define', help='Define the range by index')
+	parser_def.set_defaults(func=define)
+
+	parser_add = subparsers.add_parser('add', help='Define the range by first index')
+	parser_add.set_defaults(func=add)
+
+	parser_sub = subparsers.add_parser('subtract', help='Define the range by last index')
+	parser_sub.set_defaults(func=sub)
+
+	parser_first = subparsers.add_parser('first', help='Extract the first X bases')
+	parser_first.set_defaults(func=first)
+
+	parser_last = subparsers.add_parser('last', help='Extract the last X bases')
+	parser_last.set_defaults(func=last)
+
+	# PARSER : DEFINED
+	
+	parser_def.add_argument('-i', '--input_fasta', help="FASTA file containing sequences")
+	parser_def.add_argument('--id', default=None, help='Match sequence ID')
+	parser_def.add_argument('-o', '--output_directory', default='xSequences', help='Prefix of output directory', type=str)
+	parser_def.add_argument('--outID', default=None, help='ID for output sequence', type=str)
+	parser_def.add_argument('-p', '--output_path', default=cwd, help='Path to output', type=str)
+	parser_def.add_argument('-r', '--reverse_complement', default=False, action='store_true', help='Gets the reverse compliment')
+	parser_def.add_argument('-s', '--savename', default='xSeq', help='Prefix for output file')
+	parser_def.add_argument('--start', default=None, help='First index in range', type=int, required=True)
+	parser_def.add_argument('--stop', default=None, help='Last index in range. Must be larger than start', type=int, required=True)
+
+	
+	# PARSER : ADD
+	parser_add.add_argument('--add', default=None, help='Length of extract', type=int, required=True)
+	parser_add.add_argument('-i', '--input_fasta', help="FASTA file containing sequences")
+	parser_add.add_argument('--id', default=None, help='Match sequence ID')
+	parser_add.add_argument('-o', '--output_directory', default='xSequences', help='Prefix of output directory', type=str)
+	parser_add.add_argument('--outID', default=None, help='ID for output sequence', type=str)
+	parser_add.add_argument('-p', '--output_path', default=cwd, help='Path to output', type=str)
+	parser_add.add_argument('-r', '--reverse_complement', default=False, action='store_true', help='Gets the reverse compliment')
+	parser_add.add_argument('-s', '--savename', default='xSeq', help='Prefix for output file')
+	parser_add.add_argument('--start', default=None, help='First index in range', type=int, required=True)
+
+	
+	# PARSER : SUBTRACT
+	parser_sub.add_argument('-i', '--input_fasta', help="FASTA file containing sequences")
+	parser_sub.add_argument('--id', default=None, help='Match sequence ID')
+	parser_sub.add_argument('-o', '--output_directory', default='xSequences', help='Prefix of output directory', type=str)
+	parser_sub.add_argument('--outID', default=None, help='ID for output sequence', type=str)
+	parser_sub.add_argument('-p', '--output_path', default=cwd, help='Path to output', type=str)
+	parser_sub.add_argument('-r', '--reverse_complement', default=False, action='store_true', help='Gets the reverse compliment')
+	parser_sub.add_argument('-s', '--savename', default='xSeq', help='Prefix for output file')
+	parser_sub.add_argument('--stop', default=None, help='Last index in range', type=int, required=True)
+	parser_sub.add_argument('--sub', default=None, help='Length of extract', type=int, required=True)
+
+
+	# PARSER : FIRST X
+	parser_first.add_argument('-i', '--input_fasta', help="FASTA file containing sequences")
+	parser_first.add_argument('--id', default=None, help='Match sequence ID')
+	parser_first.add_argument('-o', '--output_directory', default='xSequences', help='Prefix of output directory', type=str)
+	parser_first.add_argument('--outID', default=None, help='ID for output sequence', type=str)
+	parser_first.add_argument('-p', '--output_path', default=cwd, help='Path to output', type=str)
+	parser_first.add_argument('-r', '--reverse_complement', default=False, action='store_true', help='Gets the reverse compliment')
+	parser_first.add_argument('-s', '--savename', default='xSeq', help='Prefix for output file')
+	parser_first.add_argument('--num', default=None, help='Number of bases to extract', type=int, required=True)
+	
+	# PARSER : LAST X
+	parser_last.add_argument('-i', '--input_fasta', help="FASTA file containing sequences")
+	parser_last.add_argument('--id', default=None, help='Match sequence ID')
+	parser_last.add_argument('-o', '--output_directory', default='xSequences', help='Prefix of output directory', type=str)
+	parser_last.add_argument('--outID', default=None, help='ID for output sequence', type=str)
+	parser_last.add_argument('-p', '--output_path', default=cwd, help='Path to output', type=str)
+	parser_last.add_argument('-r', '--reverse_complement', default=False, action='store_true', help='Gets the reverse compliment')
+	parser_last.add_argument('-s', '--savename', default='xSeq', help='Prefix for output file')
+	parser_last.add_argument('--num', default=None, help='Number of bases to extract', type=int, required=True)
+
+	args = parent_parser.parse_args()
+
+	main(args)
 
 
 
